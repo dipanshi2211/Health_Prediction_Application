@@ -1,0 +1,248 @@
+<!-- path: D:\Projects\Health_Prediction_App\templates\dashboard.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+    <nav class="navbar navbar-dark bg-primary px-4 d-flex justify-content-between">
+        <span class="navbar-brand fw-bold"> Health Prediction App </span>
+        <div class="d-flex align-items-center gap-3">
+            <span class="text-white small">{{ email }}</span>
+            <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h4 class="mb-0">Patient Records</h4>
+            <a href="/add_patient" class="btn btn-primary">+ Add New Patient</a>
+        </div>
+
+        <div id="loading" class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2 text-muted">Loading records...</p>
+        </div>
+
+        <div class="card shadow-sm d-none" id="table-card">
+            <div class="card-body p-0">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-primary">
+                        <tr>
+                            <th class="ps-3">Full Name</th>
+                            <th>Date of Birth</th>
+                            <th>Email</th>
+                            <th>Glucose</th>
+                            <th>Haemoglobin</th>
+                            <th>Cholesterol</th>
+                            <th>Remarks</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="patient-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="empty-state" class="d-none text-center py-5">
+            <p class="text-muted fs-5">No patient records found.</p>
+            <a href="/add_patient" class="btn btn-primary">+ Add Your First Patient</a>
+        </div>
+
+        <div id="error-state" class="d-none alert alert-danger">
+            Failed to load records. Please refresh the page.
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div class="modal fade" id="editModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Edit Patient</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="edit-id">
+                    <div class="mb-3">
+                        <label class="form-label">Full Name</label>
+                        <input type="text" id="edit-name" class="form-control">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Date of Birth</label>
+                        <input type="date" id="edit-dob" class="form-control">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" id="edit-email" class="form-control">
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Glucose</label>
+                            <input type="number" id="edit-glucose" class="form-control" step="0.1">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Haemoglobin</label>
+                            <input type="number" id="edit-haemoglobin" class="form-control" step="0.1">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Cholesterol</label>
+                            <input type="number" id="edit-cholesterol" class="form-control" step="0.1">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Remarks</label>
+                        <textarea id="edit-remarks" class="form-control" rows="3"></textarea>
+                    </div>
+                    <div id="edit-msg"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="saveEdit()">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirm Modal -->
+    <div class="modal fade" id="deleteModal" tabindex="-1">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">Confirm Delete</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    Are you sure you want to delete <strong id="delete-name"></strong>?
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-danger" onclick="confirmDelete()">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let allPatients = [];
+        let deleteTargetId = null;
+
+        async function loadPatients() {
+            try {
+                const res  = await fetch('/api/patients');
+                const data = await res.json();
+
+                document.getElementById('loading').classList.add('d-none');
+
+                if (!res.ok) throw new Error(data.error);
+
+                allPatients = data.patients;
+
+                if (allPatients.length === 0) {
+                    document.getElementById('empty-state').classList.remove('d-none');
+                    return;
+                }
+
+                document.getElementById('table-card').classList.remove('d-none');
+                const tbody = document.getElementById('patient-table-body');
+                tbody.innerHTML = '';
+
+                allPatients.forEach((p, index) => {
+                    const remarks = p.remarks || '';
+                    const row = `
+                        <tr>
+                            <td class="ps-3 fw-semibold">${p.full_name || ''}</td>
+                            <td>${p.dob || ''}</td>
+                            <td>${p.email || ''}</td>
+                            <td>${p.glucose ?? ''}</td>
+                            <td>${p.haemoglobin ?? ''}</td>
+                            <td>${p.cholesterol ?? ''}</td>
+                            <td>
+                                <span class="text-muted small" style="max-width:200px; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${remarks.replace(/"/g, '&quot;')}">
+                                    ${remarks || '—'}
+                                </span>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary me-1" onclick="openEdit(${index})">Edit</button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="openDelete('${p.id}', '${p.full_name}')">Delete</button>
+                            </td>
+                        </tr>`;
+                    tbody.insertAdjacentHTML('beforeend', row);
+                });
+
+            } catch (err) {
+                document.getElementById('loading').classList.add('d-none');
+                document.getElementById('error-state').classList.remove('d-none');
+            }
+        }
+
+        function openEdit(index) {
+            const p = allPatients[index];
+            document.getElementById('edit-id').value          = p.id;
+            document.getElementById('edit-name').value        = p.full_name   || '';
+            document.getElementById('edit-dob').value         = p.dob         || '';
+            document.getElementById('edit-email').value       = p.email       || '';
+            document.getElementById('edit-glucose').value     = p.glucose     ?? '';
+            document.getElementById('edit-haemoglobin').value = p.haemoglobin ?? '';
+            document.getElementById('edit-cholesterol').value = p.cholesterol ?? '';
+            document.getElementById('edit-remarks').value     = p.remarks     || '';
+            document.getElementById('edit-msg').innerHTML     = '';
+            new bootstrap.Modal(document.getElementById('editModal')).show();
+        }
+
+        async function saveEdit() {
+            const id = document.getElementById('edit-id').value;
+            const payload = {
+                full_name:   document.getElementById('edit-name').value.trim(),
+                dob:         document.getElementById('edit-dob').value,
+                email:       document.getElementById('edit-email').value.trim(),
+                glucose:     parseFloat(document.getElementById('edit-glucose').value),
+                haemoglobin: parseFloat(document.getElementById('edit-haemoglobin').value),
+                cholesterol: parseFloat(document.getElementById('edit-cholesterol').value),
+                remarks:     document.getElementById('edit-remarks').value
+            };
+
+            const res  = await fetch(`/api/patients/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            const msg  = document.getElementById('edit-msg');
+
+            if (data.success) {
+                bootstrap.Modal.getInstance(document.getElementById('editModal')).hide();
+                loadPatients();
+            } else {
+                msg.innerHTML = `<div class="alert alert-danger mt-2">${data.error}</div>`;
+            }
+        }
+
+        function openDelete(id, name) {
+            deleteTargetId = id;
+            document.getElementById('delete-name').textContent = name;
+            new bootstrap.Modal(document.getElementById('deleteModal')).show();
+        }
+
+        async function confirmDelete() {
+            const res  = await fetch(`/api/patients/${deleteTargetId}`, { method: 'DELETE' });
+            const data = await res.json();
+
+            bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
+
+            if (data.success) {
+                loadPatients();
+            } else {
+                alert('Delete failed: ' + data.error);
+            }
+        }
+
+        loadPatients();
+    </script>
+</body>
+</html>
