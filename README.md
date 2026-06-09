@@ -117,3 +117,6 @@ Open `http://127.0.0.1:5000` in your browser.
 - `serviceAccountKey.json` and `.env` are in `.gitignore` — never commit them
 - Remarks are optional; a patient record can be saved without generating them
 - The AI summary is informational only and does not constitute medical advice
+
+## Video Explanation of this Project
+https://drive.google.com/file/d/18PTeL2_YFCC4alqcnX66xJfOdeOV925-/view?usp=drive_link
